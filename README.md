@@ -61,7 +61,7 @@ plugin_manager install_bundle → /absolute/path/to/dsh-plugin-message-board
 ### Into any profile, from a shell
 
 ```bash
-git clone https://github.com/<you>/dsh-plugin-message-board.git
+git clone https://github.com/Chicago01/dsh-plugin-message-board.git
 dsh plugin --profile <profile> add /absolute/path/to/dsh-plugin-message-board
 ```
 

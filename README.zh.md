@@ -52,7 +52,7 @@ plugin_manager install_bundle → /absolute/path/to/dsh-plugin-message-board
 ### 从命令行装进任意 profile
 
 ```bash
-git clone https://github.com/<you>/dsh-plugin-message-board.git
+git clone https://github.com/Chicago01/dsh-plugin-message-board.git
 dsh plugin --profile <profile> add /absolute/path/to/dsh-plugin-message-board
 ```
 
