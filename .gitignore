@@ -1,0 +1,13 @@
+# Dependencies — a bundle install adds no runtime dependency.
+node_modules/
+
+# Local board data, if anyone points `dataFile` at the checkout.
+*.board.json
+board.json
+
+# Editor and OS noise.
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,9 @@
+# Normalize to LF in the repository: the plugin runs on Linux deployments, and
+# the Host half is a Node module that should not depend on the checkout platform.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.ico binary
+*.jpg binary
+*.webp binary

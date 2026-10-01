@@ -1,0 +1,10 @@
+# Bundle patch for dsh-plugin-message-board.
+#
+# One Host row inserts the plugin; the `dsh.client` section of package.json
+# registers the browser half under the same package name. Override this entry's
+# `config` from your own profile patch layer — a matching id replaces the whole
+# config, so restate every field you still want.
+- insert:
+    - id: message-board
+      name: 'dsh-plugin-message-board'
+      config: {}
