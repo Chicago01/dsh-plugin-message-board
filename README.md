@@ -27,10 +27,13 @@ whether the other person has actually seen it.
 ## Features
 
 - **Three scopes** — global, per project, per session, with a single rail that
-  shows every board that holds notes.
+  lists every board, so one can be started before anyone has written in it.
 - **Mutual visibility with read receipts** — each reader has their own
   watermark; your own notes show `✓ read by …` once the other person opens the
   board, and theirs are highlighted until you do.
+- **Markdown notes** — headings, lists, quotes, rules, fenced and inline code,
+  bold, italic, strikethrough and links, rendered as React elements so a note
+  can never inject markup.
 - **One click from a session** — a board button in the session header opens that
   session's board directly.
 - **The agent can read and write the board too** — two tools, so a note left for
@@ -44,6 +47,34 @@ whether the other person has actually seen it.
   correctly; UI text is registered through the Client locale service (中文 / English).
 
 ![Dark theme](docs/screenshot-dark.png)
+
+## Writing notes
+
+A note body is Markdown:
+
+| Syntax | Renders as |
+|---|---|
+| `# Heading` … `###### Heading` | a heading, demoted two levels so a note can never outrank the page |
+| `**bold**`, `*italic*`, `~~struck~~` | emphasis |
+| `` `code` ``, ```` ```lang … ``` ```` | inline code and a fenced block |
+| `- item`, `1. item` | unordered and ordered lists |
+| `> quoted` | a blockquote |
+| `---` | a horizontal rule |
+| `[text](https://…)`, bare `https://…` | a link |
+| a single newline | a line break, the way a message box works |
+
+A few deliberate limits:
+
+- **Links are scheme-checked.** Only `http:`, `https:` and `mailto:` become
+  anchors; `javascript:` and `data:` are shown as the literal text that was
+  typed.
+- **Raw HTML is not rendered.** `<b>x</b>` stays visible as `<b>x</b>`, because
+  notes are rendered to React elements rather than to an HTML string.
+- **Underscore emphasis is off.** `_like this_` is left alone so `snake_case`
+  names survive untouched. Use `*asterisks*`.
+- **Line structure is preserved by the server.** Note bodies keep `\n` and `\t`;
+  every other control character is replaced with a space. Labels, which are
+  single-line, are flattened.
 
 ## Install
 

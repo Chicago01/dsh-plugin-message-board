@@ -327,6 +327,45 @@ describe('notes', () => {
     assert.equal(result.status, 400)
   })
 
+  it('keeps a multi-line body intact so Markdown survives the round trip', async () => {
+    const text = '# Title\n\n**bold** and `code`\n\n- one\n- two\n\n```bash\nls -la\n```\n\n> quoted'
+    const created = await call(`${harness.base}/api/post`, {
+      method: 'POST',
+      body: JSON.stringify({ board: 'global', text, author: 'alice' }),
+    })
+    assert.equal(created.payload.message.text, text)
+
+    const listed = await call(`${harness.base}/api/messages?board=global`)
+    assert.equal(listed.payload.messages[0].text, text)
+  })
+
+  it('keeps tabs, and still replaces control characters that mean nothing', async () => {
+    const created = await call(`${harness.base}/api/post`, {
+      method: 'POST',
+      body: JSON.stringify({ board: 'global', text: 'a\u0000b\u0007c\td', author: 'alice' }),
+    })
+    assert.equal(created.payload.message.text, 'a b c\td')
+  })
+
+  it('normalizes CRLF to LF', async () => {
+    const created = await call(`${harness.base}/api/post`, {
+      method: 'POST',
+      body: JSON.stringify({ board: 'global', text: 'one\r\ntwo', author: 'alice' }),
+    })
+    assert.equal(created.payload.message.text, 'one\ntwo')
+  })
+
+  it('still flattens a label, because a label is one line', async () => {
+    const created = await call(`${harness.base}/api/post`, {
+      method: 'POST',
+      body: JSON.stringify({ board: 'global', text: 'x', label: 'a\nb', author: 'alice' }),
+    })
+    assert.equal(created.status, 200)
+    const boards = await call(`${harness.base}/api/boards`)
+    const global = boards.payload.boards.find((row) => row.key === 'global')
+    assert.equal(global.label, 'a b')
+  })
+
   it('keeps scopes apart', async () => {
     await call(`${harness.base}/api/post`, {
       method: 'POST',

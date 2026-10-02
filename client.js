@@ -35,7 +35,7 @@ window.__ModuleLoader__.load({
       scopeSession: '会话',
       empty: '这里还没有留言',
       emptyHint: '写下第一条，对方打开留言板时就能看到。',
-      placeholder: '写下留言… （Ctrl/⌘ + Enter 发送）',
+      placeholder: '写下留言… 支持 Markdown（Ctrl/⌘ + Enter 发送）',
       send: '发送',
       sending: '发送中…',
       refresh: '刷新',
@@ -67,7 +67,7 @@ window.__ModuleLoader__.load({
       scopeSession: 'Sessions',
       empty: 'No notes here yet',
       emptyHint: 'Write the first one and it is waiting when the other person opens the board.',
-      placeholder: 'Write a note… (Ctrl/⌘ + Enter to send)',
+      placeholder: 'Write a note… Markdown supported (Ctrl/⌘ + Enter to send)',
       send: 'Send',
       sending: 'Sending…',
       refresh: 'Refresh',
@@ -176,18 +176,25 @@ window.__ModuleLoader__.load({
       return [...seen.values()]
     }
 
-    /** Session boards, newest first, labelled with their durable titles. */
+    /**
+     * Session boards, newest first.
+     *
+     * Only sessions the host has actually titled are listed. `displayTitle`
+     * falls back to the project basename, so an untitled (usually blank)
+     * session would otherwise appear a second time under 会话, wearing the same
+     * name as its project row. The session being viewed is added separately.
+     */
     function sessionBoards(sessions, limit) {
       const rows = sessions.ids
         .map((id) => sessions.byId[id])
-        .filter((row) => row && row.origin !== 'subagent')
+        .filter((row) => row && row.origin !== 'subagent' && row.title)
         .sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
         .slice(0, limit)
       return rows.map((row) => ({
         key: `session:${row.id}`,
         scope: 'session',
         target: row.id,
-        label: row.displayTitle || row.id,
+        label: row.title || row.displayTitle || row.id,
       }))
     }
 
@@ -219,7 +226,28 @@ window.__ModuleLoader__.load({
 .dsh-mb-note-unread { border-color: var(--dsw-alias-brand-primary); }
 .dsh-mb-note-meta { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .dsh-mb-note-author { color: var(--dsw-alias-label-primary); font-weight: 600; }
-.dsh-mb-note-text { margin-top: 6px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.dsh-mb-note-text { margin-top: 6px; font-size: 13px; line-height: 1.6; word-break: break-word; }
+/* Rendered Markdown. Everything here is scoped to .dsh-mb-note-text so a note
+   can never style the page around it. */
+.dsh-mb-note-text .dsh-mb-p { margin: 0 0 8px; }
+.dsh-mb-note-text .dsh-mb-p:last-child { margin-bottom: 0; }
+.dsh-mb-note-text .dsh-mb-h { margin: 12px 0 6px; font-weight: 600; line-height: 1.35; }
+.dsh-mb-note-text .dsh-mb-h:first-child { margin-top: 0; }
+.dsh-mb-note-text h3 { font-size: 15px; }
+.dsh-mb-note-text h4 { font-size: 14px; }
+.dsh-mb-note-text h5, .dsh-mb-note-text h6 { font-size: 13px; }
+.dsh-mb-note-text .dsh-mb-list { margin: 6px 0; padding-left: 22px; }
+.dsh-mb-note-text .dsh-mb-list:last-child { margin-bottom: 0; }
+.dsh-mb-note-text li { margin: 2px 0; }
+.dsh-mb-note-text .dsh-mb-quote { margin: 6px 0; padding: 2px 0 2px 12px; border-left: 3px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); }
+.dsh-mb-note-text .dsh-mb-hr { margin: 10px 0; border: 0; border-top: 1px solid var(--dsw-alias-border-l1); }
+.dsh-mb-note-text .dsh-mb-pre { margin: 8px 0; padding: 10px 12px; border-radius: 8px; overflow-x: auto; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); }
+.dsh-mb-note-text .dsh-mb-pre:last-child { margin-bottom: 0; }
+.dsh-mb-note-text .dsh-mb-code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: .92em; }
+.dsh-mb-note-text .dsh-mb-pre .dsh-mb-code { font-size: 12px; line-height: 1.55; }
+.dsh-mb-note-text :not(pre) > .dsh-mb-code { padding: 1px 5px; border-radius: 5px; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); }
+.dsh-mb-note-text a { color: var(--dsw-alias-brand-primary); text-decoration: underline; text-underline-offset: 2px; }
+.dsh-mb-note-text strong { font-weight: 600; }
 .dsh-mb-note-foot { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--dsw-alias-label-secondary); }
 .dsh-mb-link { border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; cursor: pointer; padding: 2px 4px; border-radius: 5px; }
 .dsh-mb-link:hover { color: var(--dsw-alias-state-error-primary); }
@@ -272,6 +300,190 @@ window.__ModuleLoader__.load({
     }
 
     /* ---------------------------------------------------------------- *
+     * Markdown
+     *
+     * Notes are written by people, so they get a small Markdown subset. It
+     * renders to React elements rather than to an HTML string: every scrap of
+     * user text stays a text node, so there is no escaping step to forget and
+     * no way for a note to inject markup. Link targets are matched against a
+     * scheme allowlist, and anything else is shown as plain text.
+     * ---------------------------------------------------------------- */
+
+    /* --- markdown:start --- */
+
+    /** Only these schemes may become a link; everything else stays text. */
+    const SAFE_LINK = /^(?:https?:\/\/|mailto:)\S+$/i
+
+    /** Italic/bold/strike/code/link markers, tried in that order per position. */
+    const INLINE_SOURCE = '(`+)([\\s\\S]*?)\\1|\\*\\*([\\s\\S]+?)\\*\\*|__([\\s\\S]+?)__|~~([\\s\\S]+?)~~|\\*([^*\\n]+?)\\*|\\[([^\\]]*)\\]\\(([^)\\s]+)\\)|(https?:\\/\\/[^\\s<>()[\\]`*_]+)'
+
+    /**
+     * One line of inline Markdown into an array of React nodes.
+     *
+     * The pattern is built per call rather than shared: `renderInline` recurses
+     * into emphasis and link text, and a single global regex would have its
+     * `lastIndex` reset by the inner call, stranding the outer scan.
+     *
+     * @param source - the line.
+     * @param prefix - key prefix, unique per rendered block.
+     */
+    function renderInline(source, prefix) {
+      const pattern = new RegExp(INLINE_SOURCE, 'g')
+      const nodes = []
+      let cursor = 0
+      let seq = 0
+      const key = () => `${prefix}-${seq++}`
+      let match
+      while ((match = pattern.exec(source)) !== null) {
+        if (match.index > cursor) nodes.push(source.slice(cursor, match.index))
+        if (match[2] !== undefined) {
+          nodes.push(h('code', { key: key(), className: 'dsh-mb-code' }, match[2].trim()))
+        } else if (match[3] !== undefined) {
+          nodes.push(h('strong', { key: key() }, renderInline(match[3], key())))
+        } else if (match[4] !== undefined) {
+          nodes.push(h('strong', { key: key() }, renderInline(match[4], key())))
+        } else if (match[5] !== undefined) {
+          nodes.push(h('del', { key: key() }, renderInline(match[5], key())))
+        } else if (match[6] !== undefined) {
+          nodes.push(h('em', { key: key() }, renderInline(match[6], key())))
+        } else if (match[7] !== undefined) {
+          const url = match[8]
+          if (SAFE_LINK.test(url)) {
+            nodes.push(
+              h('a', { key: key(), href: url, target: '_blank', rel: 'noreferrer noopener' },
+                renderInline(match[7] || url, key())),
+            )
+          } else {
+            // Not a scheme we will link: keep the original characters verbatim.
+            nodes.push(source.slice(match.index, pattern.lastIndex))
+          }
+        } else {
+          nodes.push(h('a', { key: key(), href: match[9], target: '_blank', rel: 'noreferrer noopener' }, match[9]))
+        }
+        cursor = pattern.lastIndex
+        // A zero-length match would spin forever; every alternative consumes at
+        // least one character, but guard anyway.
+        if (pattern.lastIndex === match.index) pattern.lastIndex += 1
+      }
+      if (cursor < source.length) nodes.push(source.slice(cursor))
+      return nodes
+    }
+
+    /** Whether a line would start a block other than a paragraph. */
+    function startsBlock(line) {
+      return /^\s*(?:```|#{1,6}\s|>|[-*+]\s|\d+[.)]\s)/.test(line)
+        || /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)
+    }
+
+    /**
+     * A note's Markdown into an array of block React nodes.
+     *
+     * A single newline is kept as a hard break, the way people write in a
+     * message box, rather than joined the way CommonMark joins a paragraph.
+     * Headings are demoted by two levels: a note is not a document, and an
+     * `<h1>` inside one would fight the page it sits in.
+     */
+    function renderMarkdown(source) {
+      const lines = String(source ?? '').replace(/\r\n?/g, '\n').split('\n')
+      const blocks = []
+      let i = 0
+      let seq = 0
+      const key = () => `md${seq++}`
+
+      while (i < lines.length) {
+        const line = lines[i]
+
+        const fence = /^\s*```\s*([\w+#-]*)\s*$/.exec(line)
+        if (fence) {
+          const body = []
+          i += 1
+          while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+            body.push(lines[i])
+            i += 1
+          }
+          i += 1
+          blocks.push(
+            h('pre', { key: key(), className: 'dsh-mb-pre' },
+              h('code', { className: fence[1] ? `dsh-mb-code language-${fence[1]}` : 'dsh-mb-code' }, body.join('\n'))),
+          )
+          continue
+        }
+
+        if (!line.trim()) {
+          i += 1
+          continue
+        }
+
+        if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+          blocks.push(h('hr', { key: key(), className: 'dsh-mb-hr' }))
+          i += 1
+          continue
+        }
+
+        const heading = /^\s*(#{1,6})\s+(.*)$/.exec(line)
+        if (heading) {
+          const level = Math.min(heading[1].length + 2, 6)
+          blocks.push(h(`h${level}`, { key: key(), className: 'dsh-mb-h' }, renderInline(heading[2], key())))
+          i += 1
+          continue
+        }
+
+        if (/^\s*>/.test(line)) {
+          const body = []
+          while (i < lines.length && /^\s*>/.test(lines[i])) {
+            body.push(lines[i].replace(/^\s*>\s?/, ''))
+            i += 1
+          }
+          blocks.push(h('blockquote', { key: key(), className: 'dsh-mb-quote' }, ...renderInline(body.join('\n'), key())))
+          continue
+        }
+
+        const unordered = /^\s*[-*+]\s+(.*)$/
+        const ordered = /^\s*\d+[.)]\s+(.*)$/
+        if (unordered.test(line) || ordered.test(line)) {
+          const pattern = ordered.test(line) ? ordered : unordered
+          const items = []
+          while (i < lines.length) {
+            const item = pattern.exec(lines[i])
+            if (!item) break
+            items.push(h('li', { key: key() }, renderInline(item[1], key())))
+            i += 1
+          }
+          blocks.push(h(pattern === ordered ? 'ol' : 'ul', { key: key(), className: 'dsh-mb-list' }, items))
+          continue
+        }
+
+        const body = []
+        while (i < lines.length && lines[i].trim() && !startsBlock(lines[i])) {
+          body.push(lines[i])
+          i += 1
+        }
+        if (body.length === 0) {
+          body.push(line)
+          i += 1
+        }
+        const children = []
+        body.forEach((text, index) => {
+          if (index > 0) children.push(h('br', { key: key() }))
+          children.push(...renderInline(text, key()))
+        })
+        blocks.push(h('p', { key: key(), className: 'dsh-mb-p' }, children))
+      }
+      return blocks
+    }
+
+    /* --- markdown:end --- */
+
+    /** Render a note, falling back to plain text rather than losing it. */
+    function renderNote(text) {
+      try {
+        return renderMarkdown(text)
+      } catch {
+        return text
+      }
+    }
+
+    /* ---------------------------------------------------------------- *
      * Panel
      * ---------------------------------------------------------------- */
 
@@ -293,18 +505,27 @@ window.__ModuleLoader__.load({
       }
 
       if (sessions) {
-        for (const row of sessionBoards(sessions, 40)) merge(row)
+        // Titled sessions, whether or not they hold notes yet: a board has to be
+        // reachable *before* someone writes in it, or the panel can never start
+        // one. Older sessions still show up through their stored boards.
+        for (const row of sessionBoards(sessions, 15)) merge(row)
         for (const row of projectBoards(sessions)) merge(row)
+        // The session being looked at is listed even when it falls outside that
+        // window, because the header button focuses it.
+        const focusId = String(focused ?? '').startsWith('session:') ? String(focused).slice(8) : ''
+        const focusRow = focusId ? sessions.byId?.[focusId] : undefined
+        if (focusRow) {
+          merge({
+            key: `session:${focusId}`,
+            scope: 'session',
+            target: focusId,
+            label: focusRow.title || focusRow.displayTitle || focusId,
+          })
+        }
       }
 
       const all = [...byKey.values()]
       const global = all.filter((row) => row.scope === 'global')
-      // Every project is listed so a board can be started before anyone writes.
-      // Sessions are not: a deployment accumulates hundreds of them, and the
-      // natural way to open one is the board button in that session's header.
-      const session = all
-        .filter((row) => row.scope === 'session' && (row.count > 0 || row.key === focused))
-        .sort(sortRows)
       return [
         {
           scope: 'global',
@@ -313,7 +534,7 @@ window.__ModuleLoader__.load({
             : [{ key: 'global', scope: 'global', target: '', label: '', count: 0, readAt: {}, lastAt: '' }],
         },
         { scope: 'project', rows: all.filter((row) => row.scope === 'project').sort(sortRows) },
-        { scope: 'session', rows: session },
+        { scope: 'session', rows: all.filter((row) => row.scope === 'session').sort(sortRows) },
       ]
     }
 
@@ -332,7 +553,13 @@ window.__ModuleLoader__.load({
     /** Short label for a board row. */
     function boardLabel(row, t) {
       if (row.scope === 'global') return t('scopeGlobal')
-      if (!row.label) return row.target
+      if (!row.label) {
+        // A board stored before its session had a title: show a short id rather
+        // than a raw uuid, and never an empty row.
+        const id = String(row.target ?? '')
+        if (row.scope !== 'session') return id || t('scopeProject')
+        return id.length > 14 ? `${id.slice(0, 14)}…` : id || t('scopeSession')
+      }
       if (row.scope === 'project') {
         const parts = String(row.label).split(/[\\/]+/).filter(Boolean)
         return parts.length ? parts[parts.length - 1] : row.label
@@ -552,7 +779,7 @@ window.__ModuleLoader__.load({
                   h('span', null, formatTime(message.createdAt)),
                   unread ? h('span', { style: { color: 'var(--dsw-alias-brand-primary)' } }, t('unread')) : null,
                 ),
-                h('div', { className: 'dsh-mb-note-text' }, message.text),
+                h('div', { className: 'dsh-mb-note-text' }, renderNote(message.text)),
                 h(
                   'div',
                   { className: 'dsh-mb-note-foot' },

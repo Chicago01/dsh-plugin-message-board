@@ -75,6 +75,22 @@ function clean(value, maxLength) {
   return stripped.length > maxLength ? stripped.slice(0, maxLength) : stripped
 }
 
+/**
+ * Sanitize a note body.
+ *
+ * Unlike a label, a body is multi-line text — newlines and tabs are the whole
+ * point of it, because the client renders it as Markdown. Only control
+ * characters with no rendering meaning are replaced, so a note keeps its line
+ * structure across the round trip.
+ */
+function cleanText(value, maxLength) {
+  if (typeof value !== 'string') return ''
+  const normalized = value.replace(/\r\n?/g, '\n')
+  // eslint-disable-next-line no-control-regex
+  const stripped = normalized.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ' ')
+  return stripped.trim().slice(0, maxLength)
+}
+
 /** Resolve the per-profile data directory without importing DSH internals. */
 function defaultDataFile() {
   const home = process.env.DSH_HOME?.trim() || path.join(homedir(), '.dsh')
@@ -425,7 +441,7 @@ export function apply(ctx, rawConfig) {
 
     if (method === 'POST' && route === 'api/post') {
       const body = await readJsonBody(req)
-      const text = clean(body.text, MAX_TEXT_LENGTH)
+      const text = cleanText(body.text, MAX_TEXT_LENGTH)
       if (!text) {
         sendJson(res, 400, { ok: false, error: 'text is required' })
         return
@@ -579,7 +595,7 @@ export function apply(ctx, rawConfig) {
               render: (_args, value) => [{ type: 'text', text: value?.text ?? '' }],
             },
             execute: async (args, exec) => {
-              const text = clean(args?.text, MAX_TEXT_LENGTH)
+              const text = cleanText(args?.text, MAX_TEXT_LENGTH)
               if (!text) return { text: 'A note needs a non-empty `text`.' }
               const key = boardFor(args, exec.agent?.id)
               const { scope, target } = parseBoardKey(key)
